@@ -1,0 +1,165 @@
+name: Cost Janitor
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  pull-requests: write   # needed to post PR comments
+
+jobs:
+  cost-janitor:
+    name: Run Cost Janitor on LocalStack
+    runs-on: ubuntu-latest
+
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: ec2,s3,iam,sts
+          DEFAULT_REGION: us-east-1
+        options: >-
+          --health-cmd "curl -s http://localhost:4566/_localstack/health | grep -q '\"ec2\": \"available\"'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Python setup ─────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Janitor dependencies
+        run: pip install -r janitor/requirements.txt pytest
+
+      # ── Terraform setup ───────────────────────────────────────────────────────
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Install tflocal
+        run: pip install terraform-local
+
+      # ── Wait for LocalStack ───────────────────────────────────────────────────
+      - name: Wait for LocalStack to be ready
+        run: |
+          echo "Waiting for LocalStack EC2 to be available..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s http://localhost:4566/_localstack/health | python3 -c "import sys,json; h=json.load(sys.stdin); print(h.get('services',{}).get('ec2',''))" 2>/dev/null)
+            echo "  attempt $i: ec2=$STATUS"
+            if [ "$STATUS" = "available" ]; then
+              echo "LocalStack is ready."
+              break
+            fi
+            sleep 5
+          done
+
+      # ── Apply Terraform ───────────────────────────────────────────────────────
+      - name: Terraform init
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: tflocal init
+
+      - name: Terraform validate
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: tflocal validate
+
+      - name: Terraform apply
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: tflocal apply -auto-approve
+
+      # ── Unit tests ────────────────────────────────────────────────────────────
+      - name: Run unit tests
+        run: pytest janitor/tests/ -v
+
+      # ── Run Cost Janitor ──────────────────────────────────────────────────────
+      - name: Run Cost Janitor (dry-run)
+        id: janitor
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_ENDPOINT_URL: http://localhost:4566
+        run: |
+          set +e
+          python janitor/janitor.py \
+            --dry-run \
+            --region us-east-1 \
+            --endpoint-url http://localhost:4566 \
+            --output-dir ./janitor-output
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          # We allow exit code 1 (orphans found) — that's expected from the intentional orphan EBS.
+          # Only fail on unexpected errors (exit code > 1).
+          if [ "$EXIT_CODE" -gt 1 ]; then
+            echo "Janitor crashed with exit code $EXIT_CODE"
+            exit "$EXIT_CODE"
+          fi
+          exit 0
+
+      # ── Upload artifacts ──────────────────────────────────────────────────────
+      - name: Upload report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cost-janitor-report
+          path: |
+            janitor-output/report.json
+            janitor-output/report.md
+          if-no-files-found: error
+
+      # ── PR comment ────────────────────────────────────────────────────────────
+      - name: Post Markdown summary as PR comment
+        if: github.event_name == 'pull_request' && steps.janitor.outputs.exit_code == '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('janitor-output/report.md', 'utf8');
+            const body = `<!-- cost-janitor-report -->\n${summary}`;
+
+            // Find and update existing comment, or create a new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.startsWith('<!-- cost-janitor-report -->'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

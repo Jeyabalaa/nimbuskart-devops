@@ -1,0 +1,95 @@
+{
+  "scan_timestamp": "2026-05-23T09:43:23Z",
+  "account_id": "000000000000",
+  "region": "us-east-1",
+  "summary": {
+    "total_orphans": 6,
+    "estimated_monthly_waste_usd": 0.8
+  },
+  "findings": [
+    {
+      "resource_id": "vol-8f9cec34fc201fff8",
+      "resource_type": "ebs_volume",
+      "reason": "unattached",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.8,
+      "tags": {
+        "Project": "nimbuskart",
+        "Environment": "staging",
+        "Owner": "devops-team"
+      },
+      "suggested_action": "delete",
+      "safe_to_auto_delete": true
+    },
+    {
+      "resource_id": "i-6ef4681248d5304ae",
+      "resource_type": "ec2_instance",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.0,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "tag",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-fa55f970da053e327",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.0,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "tag",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-566f2d454f5d03dcc",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.0,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "tag",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-bbdc3333326769853",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.0,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "tag",
+      "safe_to_auto_delete": false
+    },
+    {
+      "resource_id": "vol-27e06f3fa8b65bdc0",
+      "resource_type": "ebs_volume",
+      "reason": "missing_tags:Project,Environment,Owner",
+      "age_days": 0,
+      "estimated_monthly_cost_usd": 0.0,
+      "tags": {
+        "Project": null,
+        "Environment": null,
+        "Owner": null
+      },
+      "suggested_action": "tag",
+      "safe_to_auto_delete": false
+    }
+  ]
+}
