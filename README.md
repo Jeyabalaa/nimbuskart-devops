@@ -13,11 +13,10 @@ This repository is a self-contained FinOps automation solution for NimbusKart, a
 - Python 3.10+
 - Terraform 1.5+
 
-### 1. Clone and set up
+### 1. set up
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+
 pip install terraform-local boto3
 ```
 
